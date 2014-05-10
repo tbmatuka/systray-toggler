@@ -167,14 +167,11 @@ GtkWidget *createMenu()
 	return menu;
 	}
 
-int main(int argc, char **argv)
-	{
-	GtkWidget *menu;
+int main(int argc, char **argv){
 	
 	gtk_init(&argc, &argv);
-	menu = createMenu();
-	tray_icon = createTrayIcon(menu);
+	tray_icon = createTrayIcon(createMenu());
 	gtk_main();
 
 	return 0;
-	}
+}
