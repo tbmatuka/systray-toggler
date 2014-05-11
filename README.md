@@ -1,4 +1,8 @@
-# systray-toggler
+# systray-toggler - hardcoded branch
+
+## What's the deal with this branch?
+This is the early version of the program where everything was hardcoded.
+This branch was created just in case that's what you need/want.
 
 ## What does this program do?
 It creates a systray icon. When the icon is left clicked, next option
