@@ -36,102 +36,147 @@ How do I compile this thing?
  Just run this command:
 $ gcc -o systray-toggler systray-toggler.c `pkg-config --cflags --libs gtk+-2.0`
 
-How do I change the number of options?
-  Change the definition of OPTIONS to how many options you want to have
-  and make sure that you have the same number of options and icons listed
-  in the arrays.
-
 Why is the coding style not consistent?
   Because like most small hacks, parts of this one are "borrowed".
 
 */
 
-#include <gtk/gtk.h>
+#include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <getopt.h>
+#include <gtk/gtk.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 
-#define OPTIONS 2
-#define COMMAND "notify-send "
-#define TOOLTIP "Current option: "
-
-//#define DEBUG
-
-gchar option[OPTIONS][256] = {
-"on",
-"off"
-	}; // options to be used as arguments
-
-gchar icon[OPTIONS][512] = {
-"/usr/share/icons/gnome/32x32/emotes/face-laugh.png",
-"/usr/share/icons/gnome/32x32/emotes/face-crying.png"
-	}; // paths to icons for each option
+#define TOOLTIP "Selected option:" // default tooltip prefix
 
 guint selected = 0;
 
+int debugFlag; // flag set by --debug
+int runAtStartFlag; // flag set by --run-at-start
+int runOnSameFlag; // flag set by --run-on-same
+int quitMenuOptionFlag; // flag set by --quit-menu-option
+
+int optionNum = 0; // number of options
+struct menuOption *firstOption = NULL;
+struct menuOption *lastOption = NULL;
+gchar *defaultIcon = NULL;
+
+struct menuOption
+	{
+	gchar *option;
+	gchar *command;
+	gchar *icon;
+	gchar *tooltip;
+	struct menuOption *next;
+	};
+
+#include "parseArgs.h"
+
+struct menuOption *selectedOption = NULL;
+
 GtkStatusIcon *tray_icon;
+
+void changeOption();
+void setOption(GtkWidget *menuItem, gpointer user_data);
+void tray_icon_on_click(GtkStatusIcon *tray_icon, gpointer user_data);
+void tray_icon_on_menu(GtkStatusIcon *status_icon, guint button, guint activate_time, gpointer menu);
+void GtkSetIcon(GtkStatusIcon *tray_icon, gchar *icon);
+static GtkStatusIcon *createTrayIcon(GtkWidget *menu);
+GtkWidget *createMenu();
 
 void changeOption()
 	{
-	// execute command with selected option
-	gchar command[128] = COMMAND;
-	strcat(command, option[selected]);
-	system(command);
-	
-	#ifdef DEBUG
-		printf("executed command: %s\n", command);
-	#endif
-	
+	// execute selected option's command if it's set
+	if(selectedOption->command != NULL)
+		{
+		system((*selectedOption).command);
+		if(debugFlag) fprintf(stderr, "executed command: %s\n", (*selectedOption).command);
+		}
+		
 	// change icon
-	gtk_status_icon_set_from_file(tray_icon, icon[selected]);
-	
-	#ifdef DEBUG
-		printf("changed icon to: %s\n", icon[selected]);
-	#endif
-	
+	if(selectedOption->icon != NULL)
+		{
+		GtkSetIcon(tray_icon, (*selectedOption).icon);
+		if(debugFlag) fprintf(stderr, "changed icon to: %s\n", (*selectedOption).icon);
+		}
+	else
+		{
+		// use default icon (the first one listed)
+		GtkSetIcon(tray_icon, defaultIcon);
+		if(debugFlag) fprintf(stderr, "changed icon to default icon: %s\n", defaultIcon);
+		}
+		
 	// change tooltip text
-	gchar tooltip[512] = TOOLTIP;
-	strcat(tooltip, option[selected]);
+	gchar *tooltip = NULL;
+	if(selectedOption->tooltip == NULL) asprintf(&tooltip, "%s %s", TOOLTIP, (*selectedOption).option);
+	else asprintf(&tooltip, (*selectedOption).tooltip);
+
 	gtk_status_icon_set_tooltip(tray_icon, tooltip);
 	
-	#ifdef DEBUG
-		printf("changed tooltip to: %s\n", tooltip);
-	#endif
+	if(debugFlag) fprintf(stderr, "changed tooltip to: %s\n", tooltip);
 	}
 
 void setOption(GtkWidget *menuItem, gpointer user_data)
 	{
-	guint setTo = GPOINTER_TO_UINT(user_data);
-	#ifdef DEBUG
-		printf("option selected from menu: %s\n", option[setTo]);
-	#endif
-	
-	if(selected != setTo)
+	gint setTo = 0;
+	if(debugFlag) fprintf(stderr, "option selected from menu: %s\n", user_data);
+		
+	if((*selectedOption).option != user_data)
 		{
-		selected = setTo;
+		struct menuOption *currentOption = firstOption;
+		while(currentOption != NULL)
+			{
+			if((*currentOption).option == user_data)
+				{
+				selectedOption = currentOption;
+				break;
+				}
+			
+			currentOption = currentOption->next;
+			}
+		
 		changeOption();
 		}
 	else
 		{
-		#ifdef DEBUG
-			printf("selected option is the same as current one, not running command\n");
-		#endif
+		if(runOnSameFlag)
+			{
+			changeOption();
+			}
+		else
+			{
+			if(debugFlag) fprintf(stderr, "selected option is the same as current one, not running changeOption()\n");
+			}
 		}
 	}
 
 void tray_icon_on_click(GtkStatusIcon *tray_icon, gpointer user_data)
 	{
-	selected++;
-	selected%= OPTIONS;
+	if(selectedOption->next != NULL) selectedOption = selectedOption->next;
+	else selectedOption = firstOption;
 	
-	#ifdef DEBUG
-		printf("icon clicked, rotating selected option to: %s\n", option[selected]);
-	#endif
-	
+	if(debugFlag) fprintf(stderr, "icon clicked, rotating selected option to: %s\n", (*selectedOption).option);
+		
 	changeOption();
 	}
 
 void tray_icon_on_menu(GtkStatusIcon *status_icon, guint button, guint activate_time, gpointer menu)
 	{
 	gtk_menu_popup(GTK_MENU(menu), NULL, NULL, gtk_status_icon_position_menu, status_icon, button, activate_time);
+	}
+
+void GtkSetIcon(GtkStatusIcon *tray_icon, gchar *icon)
+	{
+	GError *gerror = NULL;
+	GdkPixbuf *pixbuf = NULL;
+	pixbuf = gdk_pixbuf_new_from_file(icon, &gerror);
+	if(pixbuf == NULL)
+		{
+		fprintf(stderr, "Failed to open icon: %s\n", icon);
+		exit(1);
+		}
+	gtk_status_icon_set_from_pixbuf(tray_icon, pixbuf);
 	}
 
 static GtkStatusIcon *createTrayIcon(GtkWidget *menu)
@@ -141,10 +186,21 @@ static GtkStatusIcon *createTrayIcon(GtkWidget *menu)
 	tray_icon = gtk_status_icon_new();
 	g_signal_connect(G_OBJECT(tray_icon), "activate", G_CALLBACK(tray_icon_on_click), NULL);
 	g_signal_connect(G_OBJECT(tray_icon), "popup-menu", G_CALLBACK(tray_icon_on_menu), menu);
-	gtk_status_icon_set_from_file(tray_icon, icon[selected]);
+	if(selectedOption->icon != NULL)
+		{
+		GtkSetIcon(tray_icon, (*selectedOption).icon);
+		if(debugFlag) fprintf(stderr, "changed icon to: %s\n", (*selectedOption).icon);
+		}
+	else
+		{
+		GtkSetIcon(tray_icon, defaultIcon);
+		if(debugFlag) fprintf(stderr, "changed icon to default icon: %s\n", defaultIcon);
+		}
 	
-	gchar tooltip[512] = TOOLTIP;
-	strcat(tooltip, option[selected]);
+	gchar *tooltip = NULL;
+	if(selectedOption->tooltip == NULL) asprintf(&tooltip, "%s %s", TOOLTIP, (*selectedOption).option);
+	else asprintf(&tooltip, (*selectedOption).tooltip);
+	
 	gtk_status_icon_set_tooltip(tray_icon, tooltip);
 	gtk_status_icon_set_visible(tray_icon, TRUE);
 
@@ -154,25 +210,83 @@ static GtkStatusIcon *createTrayIcon(GtkWidget *menu)
 GtkWidget *createMenu()
 	{
 	guint i;
-	GtkWidget *menu, *menuItem[OPTIONS];
+	GtkWidget *menu, *menuItem;
 	
 	menu = gtk_menu_new();
-	for(i = 0; i < OPTIONS; i++)
+	
+	struct menuOption *currentOption = firstOption;
+	while(currentOption != NULL)
 		{
-		menuItem[i] = gtk_menu_item_new_with_label(option[i]);
-		g_signal_connect(G_OBJECT(menuItem[i]), "activate", G_CALLBACK(setOption), GUINT_TO_POINTER((guint)i));
-		gtk_menu_shell_append(GTK_MENU_SHELL (menu), menuItem[i]);
+		menuItem = gtk_menu_item_new_with_label((*currentOption).option);
+		g_signal_connect(G_OBJECT(menuItem), "activate", G_CALLBACK(setOption), (*currentOption).option);
+		gtk_menu_shell_append(GTK_MENU_SHELL (menu), menuItem);
+		
+		currentOption = currentOption->next;
 		}
+
+	if(quitMenuOptionFlag)
+		{
+		if(debugFlag) fprintf(stderr, "quitMenuOptionFlag is set, adding the menu option\n");
+		menuItem = gtk_menu_item_new_with_label("Quit");
+		g_signal_connect(G_OBJECT(menuItem), "activate", G_CALLBACK(gtk_main_quit), NULL);
+		gtk_menu_shell_append(GTK_MENU_SHELL (menu), menuItem);
+		}
+	
 	gtk_widget_show_all(menu);
 	return menu;
 	}
 
 int main(int argc, char **argv)
 	{
+	parseArgs(argc, argv);
+
+	if(debugFlag)
+		{
+		fprintf(stderr, "debugFlag is set\n");
+		if(runAtStartFlag) fprintf(stderr, "runAtStartFlag is set\n");
+		if(runOnSameFlag) fprintf(stderr, "runOnSameFlag is set\n");
+		if(quitMenuOptionFlag) fprintf(stderr, "quitMenuOptionFlag is set\n");
+		}
+
+	/* Print any remaining command line arguments(not options). */
+	if(debugFlag && optind < argc)
+		{
+		fprintf(stderr, "non-option ARGV-elements: ");
+		while(optind < argc) fprintf(stderr, "%s ", argv[optind++]);
+		fprintf(stderr, "\n");
+		}
+
+	if(debugFlag && firstOption != NULL)
+		{
+		struct menuOption *nextOption = firstOption;
+		struct menuOption *currentOption = NULL;
+		while(nextOption != NULL)
+			{
+			currentOption = nextOption;
+			nextOption = currentOption->next;
+			
+			fprintf(stderr, "option - %s", (*currentOption).option);
+			if(currentOption->icon != NULL) fprintf(stderr, " - %s", (*currentOption).icon);
+			if(currentOption->command != NULL) fprintf(stderr, " - %s", (*currentOption).command);
+			fprintf(stderr, "\n");
+			}
+		}
 	
-	gtk_init(&argc, &argv);
+	if(firstOption != NULL) selectedOption = firstOption;
+	
+	gtk_init(0, NULL);
 	tray_icon = createTrayIcon(createMenu());
+	
+	if(runAtStartFlag && selectedOption->command != NULL)
+		{
+		system((*selectedOption).command);
+		if(debugFlag) fprintf(stderr, "executed command at start: %s\n", (*selectedOption).command);
+		}
+	
 	gtk_main();
 
+	if(debugFlag) fprintf(stderr, "exited main gtk loop\n");
+	
+	destroyOptions();
 	return 0;
 	}
