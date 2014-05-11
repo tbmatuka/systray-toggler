@@ -18,6 +18,8 @@ Because like most small hacks, parts of this one are "borrowed".
 Here is the output of --help:
 
 ```
+Usage: systray-toggler [OPTION]... [ENTRY]...
+
 Every [ENTRY] must begin with an -o
   -o, --option=STRING      String that is displayed in the menu for this [ENTRY]
   -c, --command=STRING     Command that is run for this [ENTRY] - optional
