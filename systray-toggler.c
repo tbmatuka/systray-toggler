@@ -52,10 +52,11 @@ Why is the coding style not consistent?
 
 guint selected = 0;
 
-int debugFlag; // flag set by --debug
-int runAtStartFlag; // flag set by --run-at-start
-int runOnSameFlag; // flag set by --run-on-same
-int quitMenuOptionFlag; // flag set by --quit-menu-option
+int debugFlag = 0; // flag set by --debug
+int runAtStartFlag = 0; // flag set by --run-at-start
+int runOnSameFlag = 0; // flag set by --run-on-same
+int quitMenuOptionFlag = 0; // flag set by --quit-menu-option
+int iconsInMenuFlag = 0; // flag set by --icons-in-menu
 
 int optionNum = 0; // number of options
 struct menuOption *firstOption = NULL;
@@ -211,19 +212,43 @@ GtkWidget *createMenu()
 	{
 	guint i;
 	GtkWidget *menu, *menuItem;
+	GtkImageMenuItem *menuImageItem;
+	
+	GError *gerror = NULL;
+	GdkPixbuf *pixbuf = NULL;
 	
 	menu = gtk_menu_new();
 	
 	struct menuOption *currentOption = firstOption;
 	while(currentOption != NULL)
 		{
-		menuItem = gtk_menu_item_new_with_label((*currentOption).option);
-		g_signal_connect(G_OBJECT(menuItem), "activate", G_CALLBACK(setOption), (*currentOption).option);
-		gtk_menu_shell_append(GTK_MENU_SHELL (menu), menuItem);
+		if(iconsInMenuFlag && currentOption->icon != NULL)
+			{
+			menuItem = gtk_image_menu_item_new_with_label((*currentOption).option);
+			menuImageItem = GTK_IMAGE_MENU_ITEM(menuItem);
+			
+			pixbuf = gdk_pixbuf_new_from_file(currentOption->icon, &gerror);
+			if(pixbuf == NULL)
+				{
+				fprintf(stderr, "Failed to open icon: %s\n", currentOption->icon);
+				exit(1);
+				}
+			
+			gtk_image_menu_item_set_image(menuImageItem, gtk_image_new_from_pixbuf(pixbuf));
+			
+			g_signal_connect(G_OBJECT(menuItem), "activate", G_CALLBACK(setOption), (*currentOption).option);
+			gtk_menu_shell_append(GTK_MENU_SHELL (menu), menuItem);
+			}
+		else
+			{
+			menuItem = gtk_menu_item_new_with_label((*currentOption).option);
+			g_signal_connect(G_OBJECT(menuItem), "activate", G_CALLBACK(setOption), (*currentOption).option);
+			gtk_menu_shell_append(GTK_MENU_SHELL (menu), menuItem);
+			}
 		
 		currentOption = currentOption->next;
 		}
-
+	
 	if(quitMenuOptionFlag)
 		{
 		if(debugFlag) fprintf(stderr, "quitMenuOptionFlag is set, adding the menu option\n");

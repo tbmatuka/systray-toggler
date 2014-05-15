@@ -131,9 +131,10 @@ void parseHelp(void)
 	puts("      --run-at-start       Run the first [ENTRY]'s command on startup");
 	puts("      --run-on-same        Run the [ENTRY]'s command when it's selected in the menu,");
 	puts("                           even if that's the currently selected [ENTRY]");
-	puts("      --quit-menu-option   Show a 'Quit' option in the menu\n");
+	puts("      --quit-menu-option   Show a 'Quit' option in the menu");
+	puts("      --icons-in-menu      Show icons for options in the menu\n");
 	puts("      --debug              Display debug info");
-	puts("  -h, --help               Display this text\n");
+	puts("  -h, --help               Display this text");
 	}
 
 void parseArgs(int argc, char **argv)
@@ -148,6 +149,7 @@ void parseArgs(int argc, char **argv)
 			{"run-at-start", no_argument,  &runAtStartFlag, 1},
 			{"run-on-same",  no_argument,  &runOnSameFlag, 1},
 			{"quit-menu-option",  no_argument,  &quitMenuOptionFlag, 1},
+			{"icons-in-menu",  no_argument,  &iconsInMenuFlag, 1},
 			/* These options don't set a flag. We distinguish them by their indices. */
 			{"option",  required_argument, 0, 'o'},
 			{"command", required_argument, 0, 'c'},

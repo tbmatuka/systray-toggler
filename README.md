@@ -31,6 +31,7 @@ Other options, all off by default:
       --run-on-same        Run the [ENTRY]'s command when it's selected in the menu,
                            even if that's the currently selected [ENTRY]
       --quit-menu-option   Show a 'Quit' option in the menu
+      --icons-in-menu      Show icons for options in the menu
 
       --debug              Display debug info
   -h, --help               Display this text
